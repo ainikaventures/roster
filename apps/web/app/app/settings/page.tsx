@@ -4,6 +4,8 @@ import {
   CreditCard,
   FileSearch,
   KeyRound,
+  Lock,
+  LogIn,
   Palette,
   Shield,
   Webhook,
@@ -68,6 +70,19 @@ const SECTIONS: SectionLink[] = [
     title: 'Custom roles',
     description: 'Granular permissions beyond the defaults.',
     icon: Shield,
+    adminOnly: true,
+  },
+  {
+    href: '/app/settings/security',
+    title: 'Security',
+    description: '2FA for your account, plus org-wide IP allowlist.',
+    icon: Lock,
+  },
+  {
+    href: '/app/settings/sso',
+    title: 'SSO & SCIM',
+    description: 'SAML and identity provider provisioning.',
+    icon: LogIn,
     adminOnly: true,
   },
   {

@@ -63,6 +63,14 @@ model Organization {
   webhookDeliveries     WebhookDelivery[]
   customRoles           CustomRole[]
   subscription          Subscription?
+  ipAllowlist           IpAllowlistEntry[]
+  samlConfig            SamlConfig?
+  scimTokens            ScimToken[]
+  kudos                 Kudos[]
+  jobs                  Job[]
+  /// Optional enforcement: when set, every member must complete 2FA setup
+  /// before accessing the app shell.
+  require2fa            Boolean             @default(false)
 }
 
 model Branch {
@@ -168,6 +176,11 @@ model User {
   createdWebhooks          Webhook[]               @relation("WebhookCreator")
   customRoleAssignments    CustomRoleAssignment[]
   createdCustomRoles       CustomRole[]            @relation("CustomRoleCreator")
+  twoFactor                TwoFactorSecret?
+  kudosGiven               Kudos[]                 @relation("KudosFrom")
+  kudosReceived            Kudos[]                 @relation("KudosTo")
+  assignedJobs             Job[]                   @relation("JobAssignee")
+  createdJobs              Job[]                   @relation("JobCreator")
 }
 
 // Auth.js (NextAuth) — OAuth account link
@@ -1236,4 +1249,136 @@ model CustomRoleAssignment {
 
   @@unique([roleId, userId])
   @@index([userId])
+}
+
+// =====================================================================
+// Enterprise (Phase 8)
+// =====================================================================
+
+/// TOTP-based 2FA. `secret` is the base32-encoded shared key; we don't
+/// rotate it on each verify so backup codes work.
+model TwoFactorSecret {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  secret      String
+  /// JSON array of hashed single-use backup codes.
+  backupCodes Json     @default("[]")
+  verifiedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// CIDR ranges allowed to access the org's admin / app surface.
+/// Empty = no restriction.
+model IpAllowlistEntry {
+  id          String   @id @default(cuid())
+  orgId       String
+  cidr        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, cidr])
+  @@index([orgId])
+}
+
+/// SAML 2.0 SSO configuration (one per org). Phase 8 ships the schema +
+/// settings UI; the actual SAML exchange plugs in via @node-saml/passport-saml
+/// when the runtime env vars are configured.
+model SamlConfig {
+  id                  String   @id @default(cuid())
+  orgId               String   @unique
+  /// SAML issuer / entity ID for the IdP.
+  idpEntityId         String
+  /// SSO endpoint URL on the IdP side.
+  idpSsoUrl           String
+  /// X.509 certificate used to verify IdP signatures.
+  idpX509Cert         String   @db.Text
+  /// Whether to enforce SAML for every login (true) or allow password fallback.
+  enforce             Boolean  @default(false)
+  defaultRole         Role     @default(EMPLOYEE)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+/// SCIM v2 bearer tokens. Identity providers like Okta / Azure AD POST
+/// /scim/v2/Users to provision / deprovision members.
+model ScimToken {
+  id          String    @id @default(cuid())
+  orgId       String
+  prefix      String    @unique
+  hashedToken String
+  name        String
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+/// Kudos (recognition) — public shout-out with optional points. Powers
+/// the performance & rewards module per the spec.
+model Kudos {
+  id          String   @id @default(cuid())
+  orgId       String
+  fromUserId  String
+  toUserId    String
+  message     String   @db.Text
+  points      Int      @default(0)
+  /// Optional category tag, e.g. "teamwork", "customer-service".
+  category    String?
+  createdAt   DateTime @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  fromUser User         @relation("KudosFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User         @relation("KudosTo", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+  @@index([toUserId])
+}
+
+/// Field jobs (dispatch). A Job is a discrete unit of field work with a
+/// location and time window, assignable to one user. Distinct from Shift
+/// (which is a calendar slot within a team) — jobs travel; shifts don't.
+enum JobStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+model Job {
+  id              String    @id @default(cuid())
+  orgId           String
+  teamId          String?
+  assignedUserId  String?
+  createdById     String
+  title           String
+  description     String?
+  /// Site address (free-form for now; structured fields can land later).
+  address         String?
+  lat             Float?
+  lng             Float?
+  startsAt        DateTime
+  endsAt          DateTime
+  status          JobStatus @default(SCHEDULED)
+  completedAt     DateTime?
+  completionNotes String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  assignee  User?        @relation("JobAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  createdBy User         @relation("JobCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([orgId, startsAt])
+  @@index([assignedUserId, startsAt])
+  @@index([orgId, status])
 }

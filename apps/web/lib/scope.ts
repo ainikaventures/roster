@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
   prisma,
@@ -5,6 +6,7 @@ import {
   type AccessScope,
 } from '@roster/db';
 import { getServerAuthSession } from './auth';
+import { inAnyCidr } from './cidr';
 
 // ---------------------------------------------------------------------------
 // Server-only helpers for resolving the active session + scope.
@@ -39,6 +41,25 @@ export async function requireScope(): Promise<AuthenticatedContext> {
     // Active org references a membership that no longer exists — push them
     // back to the welcome flow so they can pick or create a new workspace.
     redirect('/signup/welcome');
+  }
+
+  // Enterprise IP allowlist (Phase 8). Owners/admins are exempt so a
+  // misconfiguration doesn't permanently lock the org out.
+  if (scope.role !== 'OWNER' && scope.role !== 'ADMIN') {
+    const allow = await prisma.ipAllowlistEntry.findMany({
+      where: { orgId: session.user.activeOrgId },
+      select: { cidr: true },
+    });
+    if (allow.length > 0) {
+      const h = headers();
+      const ip =
+        h.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+        h.get('x-real-ip') ??
+        '';
+      if (!inAnyCidr(ip, allow.map((a) => a.cidr))) {
+        redirect('/blocked');
+      }
+    }
   }
 
   return {

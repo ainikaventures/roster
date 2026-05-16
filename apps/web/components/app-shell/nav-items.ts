@@ -1,4 +1,5 @@
 import {
+  Award,
   BookOpen,
   CalendarDays,
   CalendarCheck,
@@ -10,6 +11,7 @@ import {
   ListChecks,
   MessageSquare,
   Megaphone,
+  Truck,
   Users,
   Settings,
   LayoutDashboard,
@@ -51,6 +53,8 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ['OWNER', 'ADMIN', 'BRANCH_MANAGER', 'TEAM_MANAGER'],
     phase: 6,
   },
+  { href: '/app/jobs', label: 'Jobs', icon: Truck, phase: 8 },
+  { href: '/app/kudos', label: 'Kudos', icon: Award, phase: 8 },
   {
     href: '/app/settings',
     label: 'Settings',

@@ -107,7 +107,7 @@ export default async function DashboardPage() {
               { label: 'Training + knowledge base (Phase 5)', done: true },
               { label: 'Advanced scheduling + payroll (Phase 6)', done: true },
               { label: 'Billing + REST API + webhooks (Phase 7)', done: true },
-              { label: 'Enterprise & SSO (Phase 8)', done: false },
+              { label: '2FA + SSO + kudos + jobs (Phase 8)', done: true },
             ]}
           />
         </CardContent>
