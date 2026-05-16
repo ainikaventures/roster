@@ -33,17 +33,22 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches        Branch[]
-  memberships     Membership[]
-  shifts          Shift[]
-  timeEntries     TimeEntry[]
-  auditLogs       AuditLog[]
-  notifications   Notification[]
-  channels        Channel[]
-  announcements   Announcement[]
-  tasks           Task[]
-  formTemplates   FormTemplate[]
-  formSubmissions FormSubmission[]
+  branches             Branch[]
+  memberships          Membership[]
+  shifts               Shift[]
+  timeEntries          TimeEntry[]
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  channels             Channel[]
+  announcements        Announcement[]
+  tasks                Task[]
+  formTemplates        FormTemplate[]
+  formSubmissions      FormSubmission[]
+  documents            Document[]
+  timeOffRequests      TimeOffRequest[]
+  ptoBalances          PtoBalance[]
+  onboardingTemplates  OnboardingTemplate[]
+  onboardingAssignments OnboardingAssignment[]
 }
 
 model Branch {
@@ -101,25 +106,33 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  memberships         Membership[]
-  managerAssignments  ManagerAssignment[]
-  accounts            Account[]
-  sessions            Session[]
-  shifts              Shift[]
-  timeEntries         TimeEntry[]
-  auditLogs           AuditLog[]
-  notifications       Notification[]
-  channelMembers      ChannelMember[]
-  messages            Message[]
-  reactions           MessageReaction[]
-  createdChannels     Channel[]             @relation("ChannelCreator")
-  announcements       Announcement[]
-  announcementReads   AnnouncementRead[]
-  createdTasks        Task[]                @relation("TaskCreator")
-  assignedTasks       Task[]                @relation("TaskAssignee")
-  taskCompletions     TaskCompletion[]
-  createdFormTemplates FormTemplate[]
-  formSubmissions     FormSubmission[]
+  memberships              Membership[]
+  managerAssignments       ManagerAssignment[]
+  accounts                 Account[]
+  sessions                 Session[]
+  shifts                   Shift[]
+  timeEntries              TimeEntry[]
+  auditLogs                AuditLog[]
+  notifications            Notification[]
+  channelMembers           ChannelMember[]
+  messages                 Message[]
+  reactions                MessageReaction[]
+  createdChannels          Channel[]               @relation("ChannelCreator")
+  announcements            Announcement[]
+  announcementReads        AnnouncementRead[]
+  createdTasks             Task[]                  @relation("TaskCreator")
+  assignedTasks            Task[]                  @relation("TaskAssignee")
+  taskCompletions          TaskCompletion[]
+  createdFormTemplates     FormTemplate[]
+  formSubmissions          FormSubmission[]
+  ownedDocuments           Document[]              @relation("DocumentOwner")
+  createdDocuments         Document[]              @relation("DocumentCreator")
+  documentSignatures       DocumentSignature[]
+  timeOffRequests          TimeOffRequest[]        @relation("TimeOffRequester")
+  reviewedTimeOff          TimeOffRequest[]        @relation("TimeOffReviewer")
+  ptoBalance               PtoBalance?
+  createdOnboardingTemplates OnboardingTemplate[]  @relation("OnboardingCreator")
+  onboardingAssignments    OnboardingAssignment[]  @relation("OnboardingAssignee")
 }
 
 // Auth.js (NextAuth) — OAuth account link
@@ -616,4 +629,195 @@ model FormSubmission {
   @@index([formId])
   @@index([userId])
   @@index([teamId])
+}
+
+// =====================================================================
+// HR (Phase 4)
+//
+// Documents are stored in S3 (storage URL in `fileUrl`). For envs without
+// S3 credentials, the storage layer falls back to writing a local file
+// in /tmp and returning a /api/storage/local/[id] URL. See
+// apps/web/lib/storage.ts.
+//
+// `ownerId` on Document is set for employee-specific documents (HR file,
+// IDs, certifications). Null = organization-level policy / handbook
+// document, shared with everyone.
+// =====================================================================
+
+enum DocumentKind {
+  POLICY
+  CONTRACT
+  CERTIFICATION
+  ID
+  HANDBOOK
+  OTHER
+}
+
+model Document {
+  id          String       @id @default(cuid())
+  orgId       String
+  ownerId     String?
+  createdById String
+  title       String
+  description String?
+  kind        DocumentKind @default(OTHER)
+  fileUrl     String?
+  fileSize    Int?
+  mimeType    String?
+  /// Optional certification / license expiry. Renders an "Expires in N days" badge.
+  expiresAt   DateTime?
+  /// Whether employees must sign this doc (creates DocumentSignature requirement).
+  requireSignature Boolean @default(false)
+  archivedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  org        Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  owner      User?               @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdBy  User                @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  signatures DocumentSignature[]
+
+  @@index([orgId, kind])
+  @@index([ownerId])
+  @@index([expiresAt])
+}
+
+model DocumentSignature {
+  id            String   @id @default(cuid())
+  documentId    String
+  userId        String
+  signedAt      DateTime @default(now())
+  /// Base64 PNG of the captured signature (S3 ref in later phases).
+  signatureData String   @db.Text
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([userId])
+}
+
+// =====================================================================
+// Time off + PTO
+// =====================================================================
+
+enum TimeOffType {
+  VACATION
+  SICK
+  PERSONAL
+  UNPAID
+  OTHER
+}
+
+enum TimeOffStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELED
+}
+
+model TimeOffRequest {
+  id           String        @id @default(cuid())
+  orgId        String
+  userId       String
+  type         TimeOffType   @default(VACATION)
+  startsAt     DateTime
+  endsAt       DateTime
+  /// Computed at submit time from the configured workday length.
+  hours        Int
+  reason       String?       @db.Text
+  status       TimeOffStatus @default(PENDING)
+  reviewerId   String?
+  reviewedAt   DateTime?
+  reviewNotes  String?       @db.Text
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user     User         @relation("TimeOffRequester", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User?        @relation("TimeOffReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, status])
+  @@index([userId, startsAt])
+}
+
+/// One row per user. PTO is tracked in minutes (consistent with TimeEntry).
+/// Adjustments are applied via PtoLedger entries — never edit balanceMinutes directly
+/// outside a transaction that also writes a ledger row.
+model PtoBalance {
+  id              String   @id @default(cuid())
+  orgId           String
+  userId          String   @unique
+  balanceMinutes  Int      @default(0)
+  accrualPerWeek  Int      @default(0)
+  lastAccruedAt   DateTime?
+  updatedAt       DateTime @updatedAt
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+// =====================================================================
+// Onboarding (Phase 4)
+//
+// An OnboardingTemplate stores a sequence of steps as JSON. Step kinds
+// (defined in apps/web/lib/onboarding.ts):
+//   - read_doc:     read & acknowledge a document
+//   - sign_doc:     sign a document (e-signature)
+//   - form:         complete a FormTemplate
+//   - task:         complete a Task
+//   - video:        watch a video at a URL
+//   - text:         informational copy with an "I've read this" ack
+//
+// An OnboardingAssignment is one new-hire's instance of a template.
+// completedSteps is keyed by step id.
+// =====================================================================
+
+model OnboardingTemplate {
+  id          String   @id @default(cuid())
+  orgId       String
+  title       String
+  description String?
+  /// { steps: OnboardingStep[] }
+  steps       Json
+  archivedAt  DateTime?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org         Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy   User                   @relation("OnboardingCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  assignments OnboardingAssignment[]
+
+  @@index([orgId])
+}
+
+enum OnboardingStatus {
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+model OnboardingAssignment {
+  id             String           @id @default(cuid())
+  orgId          String
+  templateId     String
+  userId         String
+  status         OnboardingStatus @default(IN_PROGRESS)
+  /// Map of stepId → { completedAt, metadata } recorded as steps are checked off.
+  completedSteps Json             @default("{}")
+  startedAt      DateTime         @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  org      Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  template OnboardingTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  user     User               @relation("OnboardingAssignee", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, userId])
+  @@index([orgId, status])
+  @@index([userId])
 }

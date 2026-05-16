@@ -103,8 +103,9 @@ export default async function DashboardPage() {
               { label: 'Schedule + time clock (Phase 1)', done: true },
               { label: 'Team chat + announcements (Phase 2)', done: true },
               { label: 'Tasks + forms (Phase 3)', done: true },
-              { label: 'Onboarding + documents (Phase 4)', done: false },
+              { label: 'Onboarding + documents + PTO (Phase 4)', done: true },
               { label: 'Training & knowledge base (Phase 5)', done: false },
+              { label: 'Advanced scheduling + payroll (Phase 6)', done: false },
             ]}
           />
         </CardContent>
