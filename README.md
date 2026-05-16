@@ -86,6 +86,24 @@ Optional but recommended:
 - `EMAIL_SERVER` / `EMAIL_FROM` — for magic-link email auth
 - `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` — error tracking
 - `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST` — analytics
+- `DEMO_MODE=true` — exposes `/demo-login` with one-click sign-in for the
+  seeded Acme Hospitality users. Leave **unset in production**.
+
+## Deploying to Vercel
+
+The repo is configured for a Vercel monorepo deploy with **Root Directory =
+`apps/web`**.
+
+1. Provision a Postgres database (Vercel Postgres, Neon, Supabase, etc.) and
+   note the connection string.
+2. In the Vercel dashboard, import the repo and set Root Directory to
+   `apps/web`. Vercel reads `apps/web/vercel.json` for the install + build
+   commands (these install the root workspace, run `prisma generate` and
+   `prisma migrate deploy`, then build Next).
+3. Add the env vars listed above to the project. For a public demo, set
+   `DEMO_MODE=true` so `/demo-login` is available.
+4. Deploy. The first build runs Prisma migrations against the configured
+   Postgres automatically.
 
 ### Database
 

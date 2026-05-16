@@ -8,7 +8,8 @@
     "start": "next start --port 3000",
     "lint": "next lint --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "vercel-build": "npx prisma generate --schema=../../packages/db/prisma/schema.prisma && npx prisma migrate deploy --schema=../../packages/db/prisma/schema.prisma && next build"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.2",
@@ -25,7 +26,7 @@
     "next-auth": "^4.24.8",
     "next-intl": "^3.20.0",
     "next-pwa": "^5.6.0",
-    "nodemailer": "^6.9.15",
+    "nodemailer": "^7.0.7",
     "posthog-js": "^1.165.0",
     "posthog-node": "^4.2.0",
     "react": "^18.3.1",

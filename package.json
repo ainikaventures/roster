@@ -15,9 +15,10 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
-    "db:generate": "turbo run db:generate",
+    "db:generate": "prisma generate --schema=packages/db/prisma/schema.prisma",
     "db:migrate": "turbo run db:migrate",
-    "db:seed": "turbo run db:seed"
+    "db:migrate:deploy": "prisma migrate deploy --schema=packages/db/prisma/schema.prisma",
+    "db:seed": "tsx packages/db/prisma/seed.ts"
   },
   "devDependencies": {
     "prettier": "^3.3.3",
@@ -28,5 +29,8 @@
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
   },
-  "packageManager": "npm@10.8.2"
+  "packageManager": "npm@10.8.2",
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  }
 }

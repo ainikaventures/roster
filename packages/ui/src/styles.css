@@ -1,10 +1,13 @@
 /*
  * Roster shared design tokens.
  * Import once in apps/web/app/globals.css alongside Tailwind directives.
+ * We deliberately do NOT wrap these in `@layer base` here — when this file
+ * is imported by globals.css, the @layer in globals.css already provides
+ * the layer context, and wrapping again would require @tailwind base in
+ * THIS file too. Plain CSS custom properties don't need layer ordering.
  */
 
-@layer base {
-  :root {
+:root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
 
@@ -65,4 +68,3 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
   }
-}
