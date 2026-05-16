@@ -8,8 +8,8 @@ import { visibleNav } from './nav-items';
 
 export function MobileNav({ role }: { role: Role }) {
   const pathname = usePathname();
-  // Show only items flagged for mobile that are in Phase 0/1.
-  const items = visibleNav(role, true).filter((i) => i.phase <= 1);
+  // Show only items flagged for mobile that are shipped (Phase ≤ 2).
+  const items = visibleNav(role, true).filter((i) => i.phase <= 2);
 
   return (
     <nav

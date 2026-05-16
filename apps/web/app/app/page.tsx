@@ -100,9 +100,10 @@ export default async function DashboardPage() {
               { label: 'Auth with email + Google sign-in', done: true },
               { label: 'Workspace creation & seed flow', done: true },
               { label: 'Role-scoped app shell (sidebar, mobile nav, breadcrumb)', done: true },
-              { label: 'Schedule + time clock (Phase 1)', done: false },
-              { label: 'Team chat + updates (Phase 2)', done: false },
+              { label: 'Schedule + time clock (Phase 1)', done: true },
+              { label: 'Team chat + announcements (Phase 2)', done: true },
               { label: 'Tasks + forms (Phase 3)', done: false },
+              { label: 'Onboarding + documents (Phase 4)', done: false },
             ]}
           />
         </CardContent>

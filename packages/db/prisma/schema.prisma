@@ -39,6 +39,8 @@ model Organization {
   timeEntries   TimeEntry[]
   auditLogs     AuditLog[]
   notifications Notification[]
+  channels      Channel[]
+  announcements Announcement[]
 }
 
 model Branch {
@@ -53,6 +55,7 @@ model Branch {
   org                Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   teams              Team[]
   managerAssignments ManagerAssignment[]
+  channels           Channel[]
 
   @@unique([orgId, name])
   @@index([orgId])
@@ -71,6 +74,7 @@ model Team {
   shifts             Shift[]
   timeEntries        TimeEntry[]
   managerAssignments ManagerAssignment[]
+  channels           Channel[]
 
   @@unique([branchId, name])
   @@index([branchId])
@@ -99,6 +103,12 @@ model User {
   timeEntries        TimeEntry[]
   auditLogs          AuditLog[]
   notifications      Notification[]
+  channelMembers     ChannelMember[]
+  messages           Message[]
+  reactions          MessageReaction[]
+  createdChannels    Channel[]            @relation("ChannelCreator")
+  announcements      Announcement[]
+  announcementReads  AnnouncementRead[]
 }
 
 // Auth.js (NextAuth) — OAuth account link
@@ -307,4 +317,146 @@ model AuditLog {
   @@index([orgId, createdAt])
   @@index([userId])
   @@index([entity, entityId])
+}
+
+// =====================================================================
+// Chat (Phase 2)
+//
+// A Channel is scoped by exactly one of (teamId | branchId | orgId).
+// kind=TEAM/BRANCH/ORG are "broadcast" channels — anyone with scope
+// access auto-joins. kind=DM/GROUP are explicit — only listed members
+// see them.
+//
+// `lastReadAt` on ChannelMember drives unread counts. Polling is the
+// transport for Phase 2; Socket.IO/SSE is a swap behind the same API.
+// =====================================================================
+
+enum ChannelKind {
+  TEAM
+  BRANCH
+  ORG
+  GROUP
+  DM
+}
+
+model Channel {
+  id          String      @id @default(cuid())
+  orgId       String
+  kind        ChannelKind
+  teamId      String?
+  branchId    String?
+  name        String?
+  description String?
+  isPrivate   Boolean     @default(false)
+  archivedAt  DateTime?
+  createdById String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  org       Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team      Team?           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  branch    Branch?         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdBy User?           @relation("ChannelCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  members   ChannelMember[]
+  messages  Message[]
+
+  @@unique([orgId, kind, teamId])
+  @@unique([orgId, kind, branchId])
+  @@index([orgId])
+  @@index([teamId])
+  @@index([branchId])
+}
+
+model ChannelMember {
+  id          String    @id @default(cuid())
+  channelId   String
+  userId      String
+  joinedAt    DateTime  @default(now())
+  lastReadAt  DateTime?
+  mutedUntil  DateTime?
+  notifyLevel String    @default("all") // "all" | "mentions" | "none"
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId, lastReadAt])
+}
+
+model Message {
+  id        String    @id @default(cuid())
+  channelId String
+  userId    String
+  body      String    @db.Text
+  editedAt  DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  channel   Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reactions MessageReaction[]
+
+  @@index([channelId, createdAt])
+  @@index([userId])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String // e.g. ":thumbsup:" or unicode
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+// =====================================================================
+// Announcements (Phase 2)
+//
+// A one-way broadcast targeted at an org, branch, or team. Read receipts
+// are tracked per user via AnnouncementRead.
+// =====================================================================
+
+enum AnnouncementScope {
+  ORG
+  BRANCH
+  TEAM
+}
+
+model Announcement {
+  id          String            @id @default(cuid())
+  orgId       String
+  createdById String
+  scope       AnnouncementScope
+  scopeId     String? // branchId or teamId; null when scope=ORG
+  title       String
+  body        String            @db.Text
+  publishedAt DateTime          @default(now())
+  archivedAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  org       Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy User               @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  reads     AnnouncementRead[]
+
+  @@index([orgId, publishedAt])
+  @@index([scope, scopeId])
+}
+
+model AnnouncementRead {
+  id             String   @id @default(cuid())
+  announcementId String
+  userId         String
+  readAt         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([userId])
 }
