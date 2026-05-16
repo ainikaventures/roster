@@ -104,8 +104,9 @@ export default async function DashboardPage() {
               { label: 'Team chat + announcements (Phase 2)', done: true },
               { label: 'Tasks + forms (Phase 3)', done: true },
               { label: 'Onboarding + documents + PTO (Phase 4)', done: true },
-              { label: 'Training & knowledge base (Phase 5)', done: false },
+              { label: 'Training + knowledge base (Phase 5)', done: true },
               { label: 'Advanced scheduling + payroll (Phase 6)', done: false },
+              { label: 'Billing + integrations (Phase 7)', done: false },
             ]}
           />
         </CardContent>

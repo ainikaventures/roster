@@ -33,22 +33,26 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches             Branch[]
-  memberships          Membership[]
-  shifts               Shift[]
-  timeEntries          TimeEntry[]
-  auditLogs            AuditLog[]
-  notifications        Notification[]
-  channels             Channel[]
-  announcements        Announcement[]
-  tasks                Task[]
-  formTemplates        FormTemplate[]
-  formSubmissions      FormSubmission[]
-  documents            Document[]
-  timeOffRequests      TimeOffRequest[]
-  ptoBalances          PtoBalance[]
-  onboardingTemplates  OnboardingTemplate[]
+  branches              Branch[]
+  memberships           Membership[]
+  shifts                Shift[]
+  timeEntries           TimeEntry[]
+  auditLogs             AuditLog[]
+  notifications         Notification[]
+  channels              Channel[]
+  announcements         Announcement[]
+  tasks                 Task[]
+  formTemplates         FormTemplate[]
+  formSubmissions       FormSubmission[]
+  documents             Document[]
+  timeOffRequests       TimeOffRequest[]
+  ptoBalances           PtoBalance[]
+  onboardingTemplates   OnboardingTemplate[]
   onboardingAssignments OnboardingAssignment[]
+  courses               Course[]
+  courseEnrollments     CourseEnrollment[]
+  kbFolders             KbFolder[]
+  kbPages               KbPage[]
 }
 
 model Branch {
@@ -133,6 +137,10 @@ model User {
   ptoBalance               PtoBalance?
   createdOnboardingTemplates OnboardingTemplate[]  @relation("OnboardingCreator")
   onboardingAssignments    OnboardingAssignment[]  @relation("OnboardingAssignee")
+  createdCourses           Course[]                @relation("CourseCreator")
+  courseEnrollments        CourseEnrollment[]
+  authoredKbPages          KbPage[]                @relation("KbPageAuthor")
+  createdKbFolders         KbFolder[]              @relation("KbFolderCreator")
 }
 
 // Auth.js (NextAuth) — OAuth account link
@@ -820,4 +828,131 @@ model OnboardingAssignment {
   @@unique([templateId, userId])
   @@index([orgId, status])
   @@index([userId])
+}
+
+// =====================================================================
+// Training (Phase 5)
+//
+// A Course holds an ordered list of modules in JSON. Module kinds
+// (defined in apps/web/lib/courses.ts): text, image, video, quiz.
+// Quizzes have questions with a passing score; the rest are info modules
+// the learner just acknowledges.
+//
+// Required courses are tracked via Course.requiredFor — null = anyone
+// can take optionally, "ALL" = everyone in the org must complete.
+// =====================================================================
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Course {
+  id            String       @id @default(cuid())
+  orgId         String
+  /// Optional team scope. NULL = available org-wide.
+  teamId        String?
+  title         String
+  description   String?      @db.Text
+  /// { modules: CourseModule[] }
+  content       Json
+  /// Set when the course is mandatory. Phase 5 supports "ALL" (org-wide
+  /// mandatory) — finer-grained role / team requirements arrive in Phase 7.
+  requiredFor   String?
+  passingScore  Int?
+  status        CourseStatus @default(DRAFT)
+  archivedAt    DateTime?
+  createdById   String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  org         Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team        Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  createdBy   User               @relation("CourseCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  enrollments CourseEnrollment[]
+
+  @@index([orgId, status])
+  @@index([teamId])
+}
+
+enum EnrollmentStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model CourseEnrollment {
+  id          String           @id @default(cuid())
+  courseId    String
+  userId      String
+  status      EnrollmentStatus @default(IN_PROGRESS)
+  /// Map of moduleId → { completedAt, score?, passed? }
+  progress    Json             @default("{}")
+  score       Int?
+  maxScore    Int?
+  startedAt   DateTime         @default(now())
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, userId])
+  @@index([userId, status])
+}
+
+// =====================================================================
+// Knowledge base (Phase 5)
+//
+// Folders nest under each other via parentId. Pages live inside folders
+// (one of folderId or parentless = root). Body is stored as Markdown
+// and rendered with the safe renderer in apps/web/lib/markdown.ts —
+// untrusted HTML is never rendered.
+//
+// Phase 5 keeps permissions simple: every folder/page in the org is
+// readable by every org member. Per-folder permissions arrive in Phase 7.
+// =====================================================================
+
+model KbFolder {
+  id           String   @id @default(cuid())
+  orgId        String
+  parentId     String?
+  name         String
+  slug         String
+  archivedAt   DateTime?
+  createdById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  parent    KbFolder?    @relation("KbFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  KbFolder[]   @relation("KbFolderTree")
+  pages     KbPage[]
+  createdBy User         @relation("KbFolderCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, parentId, slug])
+  @@index([orgId])
+}
+
+model KbPage {
+  id            String   @id @default(cuid())
+  orgId         String
+  folderId      String?
+  title         String
+  slug          String
+  body          String   @db.Text
+  version       Int      @default(1)
+  archivedAt    DateTime?
+  authorId      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  folder KbFolder?    @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  author User         @relation("KbPageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, folderId, slug])
+  @@index([orgId, updatedAt])
 }

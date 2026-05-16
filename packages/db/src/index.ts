@@ -31,6 +31,10 @@ export type {
   PtoBalance,
   OnboardingTemplate,
   OnboardingAssignment,
+  Course,
+  CourseEnrollment,
+  KbFolder,
+  KbPage,
   Role,
   ChannelKind,
   AnnouncementScope,
@@ -42,5 +46,7 @@ export type {
   TimeOffType,
   TimeOffStatus,
   OnboardingStatus,
+  CourseStatus,
+  EnrollmentStatus,
   Prisma,
 } from '@prisma/client';

@@ -1,7 +1,9 @@
 import {
+  BookOpen,
   CalendarDays,
   Clock,
   ClipboardCheck,
+  GraduationCap,
   Heart,
   ListChecks,
   MessageSquare,
@@ -37,6 +39,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/app/updates', label: 'Updates', icon: Megaphone, phase: 2 },
   { href: '/app/directory', label: 'Directory', icon: Users, phase: 1 },
   { href: '/app/hr', label: 'HR', icon: Heart, phase: 4 },
+  { href: '/app/training', label: 'Training', icon: GraduationCap, phase: 5 },
+  { href: '/app/kb', label: 'Knowledge', icon: BookOpen, phase: 5 },
   {
     href: '/app/settings',
     label: 'Settings',

@@ -4,7 +4,7 @@
 
 Roster is a unified web platform (with PWA support) that lets businesses manage their entire deskless workforce — scheduling shifts, tracking time, communicating with the team, assigning tasks, onboarding new hires, and running HR workflows — without needing five separate tools.
 
-**Status:** Phase 4 — HR Essentials shipped: document library with e-signature for policies, expiration tracking, PTO requests + approval workflow with auto-deducting balances, and onboarding templates with step-by-step progress tracking. File storage works locally out of the box; swap in S3 when credentials are ready. Builds on Phase 0–3 (foundations, schedule + time clock, chat + announcements, tasks + forms). See [info/PRODUCT_SPEC.md](info/PRODUCT_SPEC.md) for the full roadmap.
+**Status:** Phase 5 — Training & Knowledge shipped: course builder (text / image / video / quiz modules), enrollment + per-module progress tracking with auto-grading, and a knowledge base with nested folders, markdown pages, and full-text search. Markdown rendering uses a tiny in-house React-only renderer (no XSS by construction). Builds on Phase 0–4 (foundations, schedule + time clock, chat + announcements, tasks + forms, HR essentials). See [info/PRODUCT_SPEC.md](info/PRODUCT_SPEC.md) for the full roadmap.
 
 ## Architecture
 
