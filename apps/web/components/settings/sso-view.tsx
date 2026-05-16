@@ -27,8 +27,10 @@ type ScimToken = {
   id: string;
   prefix: string;
   name: string;
-  lastUsedAt: string | null;
-  revokedAt: string | null;
+  /** Date when passed from a server component, string when refetched from
+   *  /api/scim-tokens — both are accepted here. */
+  lastUsedAt: Date | string | null;
+  revokedAt: Date | string | null;
 };
 
 export function SsoView({

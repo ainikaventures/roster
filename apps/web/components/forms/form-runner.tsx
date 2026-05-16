@@ -304,14 +304,14 @@ function FieldRenderer({
               reader.readAsDataURL(file);
             }}
           />
-          {value && (
+          {value ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={value as string}
               alt=""
               className="mt-2 max-h-40 rounded-md border"
             />
-          )}
+          ) : null}
         </div>
       )}
 

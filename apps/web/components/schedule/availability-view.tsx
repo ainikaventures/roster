@@ -204,7 +204,7 @@ export function AvailabilityView() {
 }
 
 function hmToMinutes(hm: string): number {
-  const [h, m] = hm.split(':').map((n) => parseInt(n, 10));
+  const [h = 0, m = 0] = hm.split(':').map((n) => parseInt(n, 10));
   return h * 60 + m;
 }
 function minutesToHm(m: number): string {

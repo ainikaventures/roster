@@ -27,7 +27,10 @@ export async function GET(_req: Request, { params }: { params: { key: string } }
   const result = await readLocalObject(decoded);
   if (!result) return new Response('Not found', { status: 404 });
 
-  return new Response(result.body, {
+  // Node's Buffer extends Uint8Array but TS's BodyInit lib types don't accept
+  // Buffer directly. The web Response constructor handles the underlying
+  // ArrayBuffer view fine.
+  return new Response(new Uint8Array(result.body), {
     headers: {
       'Content-Type': result.contentType,
       'Cache-Control': 'private, max-age=60',

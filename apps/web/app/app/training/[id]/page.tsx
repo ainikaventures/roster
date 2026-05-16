@@ -43,7 +43,9 @@ export default async function CoursePage({ params }: { params: { id: string } })
         title={course.title}
         description={course.description}
         content={course.content as { modules: unknown[] }}
-        enrollment={course.enrollments[0] ?? null}
+        // Prisma surfaces `progress` as JsonValue; the runtime shape is
+        // validated by lib/courses.ts so the cast is safe.
+        enrollment={(course.enrollments[0] ?? null) as Parameters<typeof CoursePlayer>[0]['enrollment']}
       />
     </div>
   );

@@ -105,7 +105,8 @@ export async function GET() {
       latest: latestByChannel.get(m.channel.id) ?? null,
     }))
     .sort((a, b) => {
-      const rk = kindRank[a.kind] - kindRank[b.kind];
+      // kindRank covers every ChannelKind; the fallback is just a TS guard.
+      const rk = (kindRank[a.kind] ?? 99) - (kindRank[b.kind] ?? 99);
       if (rk !== 0) return rk;
       const at = a.latest?.createdAt?.getTime() ?? 0;
       const bt = b.latest?.createdAt?.getTime() ?? 0;

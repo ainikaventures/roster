@@ -6,8 +6,8 @@ describe('weekFor', () => {
     // Wed 2026-05-13
     const week = weekFor(new Date('2026-05-13T12:00:00Z'));
     expect(week.days).toHaveLength(7);
-    expect(week.days[0].getDay()).toBe(1); // Monday
-    expect(week.days[6].getDay()).toBe(0); // Sunday
+    expect(week.days[0]!.getDay()).toBe(1); // Monday
+    expect(week.days[6]!.getDay()).toBe(0); // Sunday
   });
 });
 

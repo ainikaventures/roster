@@ -57,3 +57,4 @@ public/worker-*.js.map
 .cache/
 .parcel-cache/
 .eslintcache
+.vercel
