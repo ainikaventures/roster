@@ -1,8 +1,10 @@
 import {
   BookOpen,
   CalendarDays,
+  CalendarCheck,
   Clock,
   ClipboardCheck,
+  DollarSign,
   GraduationCap,
   Heart,
   ListChecks,
@@ -41,6 +43,14 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/app/hr', label: 'HR', icon: Heart, phase: 4 },
   { href: '/app/training', label: 'Training', icon: GraduationCap, phase: 5 },
   { href: '/app/kb', label: 'Knowledge', icon: BookOpen, phase: 5 },
+  { href: '/app/availability', label: 'Availability', icon: CalendarCheck, phase: 6 },
+  {
+    href: '/app/payroll',
+    label: 'Payroll',
+    icon: DollarSign,
+    roles: ['OWNER', 'ADMIN', 'BRANCH_MANAGER', 'TEAM_MANAGER'],
+    phase: 6,
+  },
   {
     href: '/app/settings',
     label: 'Settings',

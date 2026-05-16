@@ -1,16 +1,22 @@
 import { z } from 'zod';
 import { prisma } from '@roster/db';
 import { audit, ctxOr401, err, json, ok } from '@/lib/api';
+import { withinFence } from '@/lib/geofence';
 
 const Body = z.object({
   teamId: z.string().min(1).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+  selfieData: z.string().max(2_000_000).optional(),
 });
 
 // ---------------------------------------------------------------------------
 // POST /api/time/clock-in
-// Refuses to start a new entry if one is already open.
-// Employees clock in to their assigned team automatically; managers may
-// optionally pass a teamId (they often cover multiple teams).
+//
+// Phase 6 additions: optional GPS coords + base64 selfie. When the team has
+// `geofenceRadius` set, the server enforces the radius — refusing the
+// clock-in if the user is outside the fence. When the team requires a
+// selfie, a missing capture is also a hard error.
 // ---------------------------------------------------------------------------
 
 export async function POST(req: Request) {
@@ -22,7 +28,6 @@ export async function POST(req: Request) {
     return json(err('invalid_input', 'Invalid input'), { status: 400 });
   }
 
-  // Already clocked in?
   const open = await prisma.timeEntry.findFirst({
     where: { userId: ctx.userId, orgId: ctx.orgId, clockedOut: null },
     select: { id: true },
@@ -40,14 +45,54 @@ export async function POST(req: Request) {
     });
     teamId = membership?.teamId ?? undefined;
   }
-
   if (!teamId) {
     return json(err('no_team', 'No team to clock into. Pass teamId.'), { status: 400 });
   }
-
-  // Verify scope can clock into this team.
   if (ctx.scope.teamIds !== null && !ctx.scope.teamIds.includes(teamId)) {
     return json(err('forbidden', 'You can’t clock into that team.'), { status: 403 });
+  }
+
+  // Fetch the team to enforce geofence / selfie requirements.
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      id: true,
+      lat: true,
+      lng: true,
+      geofenceRadius: true,
+      requireSelfieClockIn: true,
+    },
+  });
+  if (!team) return json(err('not_found', 'Team not found.'), { status: 404 });
+
+  let clockedInDistance: number | null = null;
+  if (team.lat != null && team.lng != null && team.geofenceRadius) {
+    if (parsed.data.lat == null || parsed.data.lng == null) {
+      return json(err('location_required', 'This team requires GPS to clock in.'), {
+        status: 400,
+      });
+    }
+    const result = withinFence(
+      { lat: team.lat, lng: team.lng },
+      team.geofenceRadius,
+      { lat: parsed.data.lat, lng: parsed.data.lng },
+    );
+    if (!result.inside) {
+      return json(
+        err(
+          'out_of_geofence',
+          `You’re ${result.distance}m from the team site (allowed: ${team.geofenceRadius}m).`,
+        ),
+        { status: 403 },
+      );
+    }
+    clockedInDistance = result.distance;
+  }
+
+  if (team.requireSelfieClockIn && !parsed.data.selfieData) {
+    return json(err('selfie_required', 'This team requires a selfie to clock in.'), {
+      status: 400,
+    });
   }
 
   const entry = await prisma.timeEntry.create({
@@ -56,6 +101,10 @@ export async function POST(req: Request) {
       teamId,
       userId: ctx.userId,
       clockedIn: new Date(),
+      clockedInLat: parsed.data.lat ?? null,
+      clockedInLng: parsed.data.lng ?? null,
+      clockedInDistance,
+      clockedInSelfie: parsed.data.selfieData ?? null,
     },
   });
 
@@ -65,7 +114,12 @@ export async function POST(req: Request) {
     action: 'time.clocked_in',
     entity: 'TimeEntry',
     entityId: entry.id,
-    metadata: { teamId },
+    metadata: {
+      teamId,
+      withGps: parsed.data.lat != null && parsed.data.lng != null,
+      withSelfie: !!parsed.data.selfieData,
+      distance: clockedInDistance,
+    },
   });
 
   return json(ok(entry));

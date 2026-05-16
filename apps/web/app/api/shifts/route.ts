@@ -71,6 +71,7 @@ const CreateBody = z
     endsAt: z.string().datetime(),
     notes: z.string().max(500).optional(),
     publish: z.boolean().optional(),
+    isOpen: z.boolean().optional(),
   })
   .refine((v) => new Date(v.startsAt) < new Date(v.endsAt), {
     message: 'startsAt must be before endsAt',
@@ -111,11 +112,12 @@ export async function POST(req: Request) {
     data: {
       orgId: ctx.orgId,
       teamId: parsed.data.teamId,
-      userId: parsed.data.userId ?? null,
+      userId: parsed.data.isOpen ? null : parsed.data.userId ?? null,
       startsAt: new Date(parsed.data.startsAt),
       endsAt: new Date(parsed.data.endsAt),
       notes: parsed.data.notes ?? null,
       published: !!parsed.data.publish,
+      isOpen: !!parsed.data.isOpen,
     },
   });
 

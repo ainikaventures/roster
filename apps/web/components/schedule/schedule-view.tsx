@@ -71,6 +71,34 @@ export function ScheduleView({
     onSuccess: () => qc.invalidateQueries({ queryKey: ['shifts'] }),
   });
 
+  const claim = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/shifts/${id}/claim`, { method: 'POST' });
+      const body = await res.json();
+      if (!body.ok) throw new Error(body.error?.message ?? 'Failed to claim');
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['shifts'] }),
+  });
+
+  const copyWeek = useMutation({
+    mutationFn: async (teamId: string) => {
+      const nextWeekStart = new Date(week.start.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const res = await fetch('/api/shifts/copy-week', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamId,
+          fromWeekStart: week.start.toISOString(),
+          toWeekStart: nextWeekStart.toISOString(),
+        }),
+      });
+      const body = await res.json();
+      if (!body.ok) throw new Error(body.error?.message ?? 'Failed');
+      return body.data as { copied: number };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['shifts'] }),
+  });
+
   const visibleTeams =
     teamFilter === 'all' ? teams : teams.filter((t) => t.id === teamFilter);
   const shiftsByDayTeam = groupShifts(shiftsQuery.data ?? []);
@@ -130,6 +158,17 @@ export function ScheduleView({
               {publish.isPending
                 ? 'Publishing…'
                 : `Publish ${draftCount || ''} draft${draftCount === 1 ? '' : 's'}`}
+            </Button>
+          )}
+
+          {canEdit && teamFilter !== 'all' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => copyWeek.mutate(teamFilter)}
+              disabled={copyWeek.isPending}
+            >
+              {copyWeek.isPending ? 'Copying…' : 'Copy week →'}
             </Button>
           )}
 
@@ -205,6 +244,8 @@ export function ScheduleView({
                         color={team.color}
                         canEdit={canEdit}
                         isMine={s.userId === userId}
+                        canClaim={s.published && s.userId === null}
+                        onClaim={() => claim.mutate(s.id)}
                         onDelete={() => deleteShift.mutate(s.id)}
                       />
                     ))}
@@ -265,21 +306,27 @@ function ShiftCard({
   color,
   canEdit,
   isMine,
+  canClaim,
+  onClaim,
   onDelete,
 }: {
   shift: Shift;
   color: string | null;
   canEdit: boolean;
   isMine: boolean;
+  canClaim: boolean;
+  onClaim: () => void;
   onDelete: () => void;
 }) {
   const bg = color ?? 'hsl(var(--primary))';
+  const isOpen = shift.userId === null;
   return (
     <div
       className={cn(
         'mb-1 rounded-md border-l-4 bg-background px-2 py-1.5 text-xs shadow-sm',
         !shift.published && 'border-dashed opacity-80',
         isMine && 'ring-1 ring-primary',
+        isOpen && shift.published && 'bg-amber-50 dark:bg-amber-950/20',
       )}
       style={{ borderLeftColor: bg }}
     >
@@ -287,17 +334,30 @@ function ShiftCard({
         <span className="font-medium">
           {fmtTime(shift.startsAt)} – {fmtTime(shift.endsAt)}
         </span>
-        {!shift.published && (
+        {!shift.published ? (
           <Badge variant="outline" className="text-[10px]">
             Draft
           </Badge>
-        )}
+        ) : isOpen ? (
+          <Badge variant="outline" className="text-[10px]">
+            Open
+          </Badge>
+        ) : null}
       </div>
       <div className="truncate text-muted-foreground">
         {shift.user?.name ?? shift.user?.email ?? 'Unassigned'}
       </div>
-      {canEdit && (
-        <div className="mt-1 flex justify-end">
+      <div className="mt-1 flex justify-end gap-2">
+        {canClaim && !canEdit && (
+          <button
+            type="button"
+            onClick={onClaim}
+            className="text-[10px] font-medium text-primary hover:underline"
+          >
+            Claim
+          </button>
+        )}
+        {canEdit && (
           <button
             type="button"
             onClick={onDelete}
@@ -305,8 +365,8 @@ function ShiftCard({
           >
             Delete
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

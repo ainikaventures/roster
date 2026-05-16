@@ -35,12 +35,36 @@ export function ClockWidget() {
 
   const clockIn = useMutation({
     mutationFn: async () => {
+      // Best-effort location capture. We always send if available; the server
+      // decides whether the team requires it.
+      const coords = await getCurrentCoords();
       const res = await fetch('/api/time/clock-in', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          lat: coords?.lat,
+          lng: coords?.lng,
+        }),
       });
       const body = await res.json();
+      // If the server says a selfie is required, retry once with capture.
+      if (!body.ok && body.error?.code === 'selfie_required') {
+        const selfie = await captureSelfie();
+        if (selfie) {
+          const retry = await fetch('/api/time/clock-in', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              lat: coords?.lat,
+              lng: coords?.lng,
+              selfieData: selfie,
+            }),
+          });
+          const retryBody = await retry.json();
+          if (!retryBody.ok) throw new Error(retryBody.error?.message ?? 'Failed');
+          return;
+        }
+      }
       if (!body.ok) throw new Error(body.error?.message ?? 'Failed');
     },
     onSuccess: invalidate,
@@ -159,4 +183,41 @@ function LiveDuration({ startIso }: { startIso: string }) {
       {fmtDuration(minutes)} elapsed
     </div>
   );
+}
+
+async function getCurrentCoords(): Promise<{ lat: number; lng: number } | null> {
+  if (typeof navigator === 'undefined' || !('geolocation' in navigator)) return null;
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 30_000 },
+    );
+  });
+}
+
+// Captures a single-frame selfie from the user's webcam. Returns a base64 data URL.
+async function captureSelfie(): Promise<string | null> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    return null;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 480 } },
+      audio: false,
+    });
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    await video.play();
+    // Give the camera a moment to expose / focus.
+    await new Promise((r) => setTimeout(r, 600));
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')?.drawImage(video, 0, 0);
+    stream.getTracks().forEach((t) => t.stop());
+    return canvas.toDataURL('image/jpeg', 0.7);
+  } catch {
+    return null;
+  }
 }

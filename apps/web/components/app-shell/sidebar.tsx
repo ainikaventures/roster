@@ -23,9 +23,9 @@ export function Sidebar({ role }: { role: Role }) {
         {items.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          // Phases 0–5 are live; Phase 6+ items still render as "Soon".
+          // Phases 0–6 are live; Phase 7+ items still render as "Soon".
           // Bump the threshold when a new phase ships.
-          const comingSoon = item.phase > 5;
+          const comingSoon = item.phase > 6;
 
           const inner = (
             <span
@@ -62,7 +62,7 @@ export function Sidebar({ role }: { role: Role }) {
       </nav>
 
       <div className="border-t p-3 text-xs text-muted-foreground">
-        <p>Phase 5 · Training &amp; Knowledge</p>
+        <p>Phase 6 · Advanced Scheduling</p>
       </div>
     </aside>
   );

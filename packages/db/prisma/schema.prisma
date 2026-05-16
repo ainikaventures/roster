@@ -53,6 +53,9 @@ model Organization {
   courseEnrollments     CourseEnrollment[]
   kbFolders             KbFolder[]
   kbPages               KbPage[]
+  shiftTemplates        ShiftTemplate[]
+  shiftSwapRequests     ShiftSwapRequest[]
+  availabilities        Availability[]
 }
 
 model Branch {
@@ -78,6 +81,13 @@ model Team {
   branchId  String
   name      String
   color     String? // hex, used in multi-team calendar color-coding
+  /// Optional geofence for GPS-restricted clock-in. Phase 6.
+  lat       Float?
+  lng       Float?
+  /// Allowed radius (meters) around (lat, lng) for clock-in. NULL = no fence.
+  geofenceRadius Int?
+  /// Whether clock-in additionally requires a selfie capture.
+  requireSelfieClockIn Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -90,6 +100,8 @@ model Team {
   tasks              Task[]
   formTemplates      FormTemplate[]
   formSubmissions    FormSubmission[]
+  shiftTemplates     ShiftTemplate[]
+  availabilities     Availability[]
 
   @@unique([branchId, name])
   @@index([branchId])
@@ -141,6 +153,10 @@ model User {
   courseEnrollments        CourseEnrollment[]
   authoredKbPages          KbPage[]                @relation("KbPageAuthor")
   createdKbFolders         KbFolder[]              @relation("KbFolderCreator")
+  shiftSwapsRequested      ShiftSwapRequest[]      @relation("SwapRequester")
+  shiftSwapsAddressed      ShiftSwapRequest[]      @relation("SwapRecipient")
+  shiftSwapsReviewed       ShiftSwapRequest[]      @relation("SwapReviewer")
+  availabilities           Availability[]
 }
 
 // Auth.js (NextAuth) — OAuth account link
@@ -251,16 +267,22 @@ model Shift {
   endsAt    DateTime
   notes     String?
   published Boolean  @default(false)
+  /// True for shifts published without an assignee. Employees can claim
+  /// these via /api/shifts/:id/claim. NULL userId + isOpen=false is a
+  /// pre-publish draft "to fill".
+  isOpen    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  team Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  org           Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team          Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user          User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  swapRequests  ShiftSwapRequest[]
 
   @@index([orgId])
   @@index([teamId, startsAt])
   @@index([userId, startsAt])
+  @@index([orgId, isOpen, published])
 }
 
 // =====================================================================
@@ -278,6 +300,13 @@ model TimeEntry {
   approvedBy String?
   approvedAt DateTime?
   notes      String?
+  /// Captured location of the clock-in event (Phase 6).
+  clockedInLat  Float?
+  clockedInLng  Float?
+  /// Distance from the team geofence center (meters) at clock-in time.
+  clockedInDistance Int?
+  /// Base64 selfie captured at clock-in (S3 ref once Phase 7 wires storage).
+  clockedInSelfie   String? @db.Text
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -955,4 +984,102 @@ model KbPage {
 
   @@unique([orgId, folderId, slug])
   @@index([orgId, updatedAt])
+}
+
+// =====================================================================
+// Advanced scheduling (Phase 6)
+//
+// ShiftTemplate stores a recurring weekly slot scoped to a team. Times
+// are stored as minute-of-day integers (0–1439) so they're timezone-
+// independent at the schema level; the API converts to the team's
+// timezone when materializing.
+//
+// Availability captures windows when an employee prefers / refuses to
+// be scheduled.
+//
+// ShiftSwapRequest models the worker-driven swap flow with manager
+// approval. The original shift's user is the requester; the recipient
+// is set when the worker proposes a specific teammate to cover.
+// =====================================================================
+
+model ShiftTemplate {
+  id              String   @id @default(cuid())
+  orgId           String
+  teamId          String
+  name            String
+  /// 0 = Sunday, 1 = Monday, …, 6 = Saturday.
+  dayOfWeek       Int
+  startMinutes    Int
+  endMinutes      Int
+  defaultUserId   String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([teamId, dayOfWeek])
+}
+
+enum AvailabilityKind {
+  AVAILABLE
+  UNAVAILABLE
+  PREFERRED
+}
+
+model Availability {
+  id           String           @id @default(cuid())
+  orgId        String
+  userId       String
+  teamId       String?
+  dayOfWeek    Int
+  startMinutes Int
+  endMinutes   Int
+  kind         AvailabilityKind @default(AVAILABLE)
+  note         String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([userId, dayOfWeek])
+  @@index([orgId])
+}
+
+enum SwapStatus {
+  PENDING_RECIPIENT
+  PENDING_MANAGER
+  APPROVED
+  DENIED
+  CANCELED
+}
+
+model ShiftSwapRequest {
+  id           String     @id @default(cuid())
+  orgId        String
+  shiftId      String
+  requesterId  String
+  recipientId  String?
+  reason       String?    @db.Text
+  status       SwapStatus @default(PENDING_RECIPIENT)
+  reviewerId   String?
+  reviewedAt   DateTime?
+  reviewNotes  String?    @db.Text
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  shift     Shift        @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  requester User         @relation("SwapRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipient User?        @relation("SwapRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  reviewer  User?        @relation("SwapReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, status])
+  @@index([shiftId])
+  @@index([requesterId])
+  @@index([recipientId])
 }

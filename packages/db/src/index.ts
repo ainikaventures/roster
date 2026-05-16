@@ -35,6 +35,9 @@ export type {
   CourseEnrollment,
   KbFolder,
   KbPage,
+  ShiftTemplate,
+  Availability,
+  ShiftSwapRequest,
   Role,
   ChannelKind,
   AnnouncementScope,
@@ -48,5 +51,7 @@ export type {
   OnboardingStatus,
   CourseStatus,
   EnrollmentStatus,
+  AvailabilityKind,
+  SwapStatus,
   Prisma,
 } from '@prisma/client';

@@ -108,8 +108,24 @@ export function Timesheet({ scope }: { scope: 'self' | 'manager' }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="text-sm text-muted-foreground">
-          Total: <span className="font-medium text-foreground">{fmtDuration(totalMinutes)}</span>
+        <div className="flex flex-wrap items-baseline gap-4 text-sm text-muted-foreground">
+          <span>
+            Total: <span className="font-medium text-foreground">{fmtDuration(totalMinutes)}</span>
+          </span>
+          {totalMinutes > 40 * 60 && (
+            <span>
+              Regular:{' '}
+              <span className="font-medium text-foreground">{fmtDuration(40 * 60)}</span>
+            </span>
+          )}
+          {totalMinutes > 40 * 60 && (
+            <span>
+              Overtime:{' '}
+              <span className="font-medium text-amber-700 dark:text-amber-400">
+                {fmtDuration(totalMinutes - 40 * 60)}
+              </span>
+            </span>
+          )}
         </div>
 
         {(entries.data ?? []).length === 0 && !entries.isLoading && (

@@ -41,6 +41,7 @@ export function NewShiftDialog({
   const [userId, setUserId] = React.useState<string>('');
   const [notes, setNotes] = React.useState('');
   const [publishNow, setPublishNow] = React.useState(false);
+  const [openShift, setOpenShift] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -74,11 +75,12 @@ export function NewShiftDialog({
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 teamId,
-                userId: userId || null,
+                userId: openShift ? null : userId || null,
                 startsAt: new Date(startsAt).toISOString(),
                 endsAt: new Date(endsAt).toISOString(),
                 notes: notes.trim() || undefined,
                 publish: publishNow,
+                isOpen: openShift,
               }),
             });
             const body = await res.json();
@@ -138,15 +140,23 @@ export function NewShiftDialog({
               className="mt-1.5 h-10 w-full rounded-md border bg-background px-3 text-sm"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              disabled={!members.data}
+              disabled={!members.data || openShift}
             >
-              <option value="">Unassigned (open shift)</option>
+              <option value="">Unassigned</option>
               {(members.data ?? []).map((m) => (
                 <option key={m.user.id} value={m.user.id}>
                   {m.user.name ?? m.user.email}
                 </option>
               ))}
             </select>
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={openShift}
+                onChange={(e) => setOpenShift(e.target.checked)}
+              />
+              Open shift (claim-based)
+            </label>
           </div>
 
           <div>
