@@ -15,8 +15,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  /// Used by `prisma migrate` to bypass connection poolers (e.g. Neon's
+  /// PgBouncer in transaction mode, which doesn't support DDL transactions).
+  /// In environments without a pooler, set DIRECT_URL = DATABASE_URL.
+  directUrl = env("DIRECT_URL")
 }
 
 // =====================================================================
