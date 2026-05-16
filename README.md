@@ -4,7 +4,7 @@
 
 Roster is a unified web platform (with PWA support) that lets businesses manage their entire deskless workforce — scheduling shifts, tracking time, communicating with the team, assigning tasks, onboarding new hires, and running HR workflows — without needing five separate tools.
 
-**Status:** Phase 2 — Communications shipped: team chat (HTTP + polling transport), org/branch/team announcements with read tracking, and @mention notifications, on top of the Phase 1 scheduling, time clock, and directory. See [info/PRODUCT_SPEC.md](info/PRODUCT_SPEC.md) for the full roadmap.
+**Status:** Phase 3 — Tasks & Forms shipped: assignable tasks with photo / signature / note requirements (one-off or recurring), a JSON-schema form runtime with 8 field types and conditional logic, and a no-drag form builder. Builds on Phase 0–2 (foundations, schedule + time clock, chat + announcements). See [info/PRODUCT_SPEC.md](info/PRODUCT_SPEC.md) for the full roadmap.
 
 ## Architecture
 

@@ -102,8 +102,9 @@ export default async function DashboardPage() {
               { label: 'Role-scoped app shell (sidebar, mobile nav, breadcrumb)', done: true },
               { label: 'Schedule + time clock (Phase 1)', done: true },
               { label: 'Team chat + announcements (Phase 2)', done: true },
-              { label: 'Tasks + forms (Phase 3)', done: false },
+              { label: 'Tasks + forms (Phase 3)', done: true },
               { label: 'Onboarding + documents (Phase 4)', done: false },
+              { label: 'Training & knowledge base (Phase 5)', done: false },
             ]}
           />
         </CardContent>

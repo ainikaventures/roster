@@ -33,14 +33,17 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches      Branch[]
-  memberships   Membership[]
-  shifts        Shift[]
-  timeEntries   TimeEntry[]
-  auditLogs     AuditLog[]
-  notifications Notification[]
-  channels      Channel[]
-  announcements Announcement[]
+  branches        Branch[]
+  memberships     Membership[]
+  shifts          Shift[]
+  timeEntries     TimeEntry[]
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  channels        Channel[]
+  announcements   Announcement[]
+  tasks           Task[]
+  formTemplates   FormTemplate[]
+  formSubmissions FormSubmission[]
 }
 
 model Branch {
@@ -75,6 +78,9 @@ model Team {
   timeEntries        TimeEntry[]
   managerAssignments ManagerAssignment[]
   channels           Channel[]
+  tasks              Task[]
+  formTemplates      FormTemplate[]
+  formSubmissions    FormSubmission[]
 
   @@unique([branchId, name])
   @@index([branchId])
@@ -95,20 +101,25 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  memberships        Membership[]
-  managerAssignments ManagerAssignment[]
-  accounts           Account[]
-  sessions           Session[]
-  shifts             Shift[]
-  timeEntries        TimeEntry[]
-  auditLogs          AuditLog[]
-  notifications      Notification[]
-  channelMembers     ChannelMember[]
-  messages           Message[]
-  reactions          MessageReaction[]
-  createdChannels    Channel[]            @relation("ChannelCreator")
-  announcements      Announcement[]
-  announcementReads  AnnouncementRead[]
+  memberships         Membership[]
+  managerAssignments  ManagerAssignment[]
+  accounts            Account[]
+  sessions            Session[]
+  shifts              Shift[]
+  timeEntries         TimeEntry[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  channelMembers      ChannelMember[]
+  messages            Message[]
+  reactions           MessageReaction[]
+  createdChannels     Channel[]             @relation("ChannelCreator")
+  announcements       Announcement[]
+  announcementReads   AnnouncementRead[]
+  createdTasks        Task[]                @relation("TaskCreator")
+  assignedTasks       Task[]                @relation("TaskAssignee")
+  taskCompletions     TaskCompletion[]
+  createdFormTemplates FormTemplate[]
+  formSubmissions     FormSubmission[]
 }
 
 // Auth.js (NextAuth) — OAuth account link
@@ -459,4 +470,150 @@ model AnnouncementRead {
 
   @@unique([announcementId, userId])
   @@index([userId])
+}
+
+// =====================================================================
+// Tasks (Phase 3)
+//
+// A task belongs to exactly one team. Optional assignee (open tasks have
+// userId=null). Recurring tasks are modeled by `recurrence` — when set,
+// every completion creates a TaskCompletion row, and the task stays
+// open. One-off tasks transition to status=DONE on completion.
+// =====================================================================
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  ARCHIVED
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TaskRecurrence {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+model Task {
+  id                       String         @id @default(cuid())
+  orgId                    String
+  teamId                   String
+  assignedUserId           String?
+  createdById              String
+  title                    String
+  description              String?        @db.Text
+  status                   TaskStatus     @default(OPEN)
+  priority                 TaskPriority   @default(NORMAL)
+  dueAt                    DateTime?
+  recurrence               TaskRecurrence @default(NONE)
+  /// Whether the completer must attach a photo. (Attachment upload arrives in Phase 4.)
+  requirePhoto             Boolean        @default(false)
+  /// Whether the completer must attach a signature.
+  requireSignature         Boolean        @default(false)
+  /// Whether the completer must add a free-text note.
+  requireNote              Boolean        @default(false)
+  archivedAt               DateTime?
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+
+  org         Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team        Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  assignee    User?            @relation("TaskAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  createdBy   User             @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  completions TaskCompletion[]
+
+  @@index([orgId])
+  @@index([teamId, status])
+  @@index([assignedUserId, status])
+}
+
+model TaskCompletion {
+  id          String   @id @default(cuid())
+  taskId      String
+  userId      String
+  completedAt DateTime @default(now())
+  notes       String?  @db.Text
+  /// JSON-encoded list of attachment URLs (filled in Phase 4 when S3 lands).
+  evidence    Json?
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, completedAt])
+  @@index([userId])
+}
+
+// =====================================================================
+// Forms (Phase 3)
+//
+// A FormTemplate stores the field schema as JSON. The runtime layer
+// (apps/web/lib/forms.ts) defines the supported field types and
+// conditional logic. Submissions store the answers as JSON, keyed by
+// field id.
+// =====================================================================
+
+model FormTemplate {
+  id          String  @id @default(cuid())
+  orgId       String
+  /// Optional team scope. NULL = available to everyone in the org.
+  teamId      String?
+  title       String
+  description String?
+  /// Wire format: { fields: FieldDef[], scoring?: ScoringConfig, settings?: ... }
+  schema      Json
+  isActive    Boolean @default(true)
+  archivedAt  DateTime?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org         Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team        Team?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  createdBy   User             @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  submissions FormSubmission[]
+
+  @@index([orgId])
+  @@index([teamId])
+}
+
+enum FormSubmissionStatus {
+  SUBMITTED
+  REVIEWED
+  FLAGGED
+}
+
+model FormSubmission {
+  id          String               @id @default(cuid())
+  orgId       String
+  formId      String
+  userId      String
+  teamId      String?
+  /// Answers keyed by field id. Shape determined by the form's schema.
+  answers     Json
+  /// Aggregate score (computed at submit time if the schema declares scoring).
+  score       Int?
+  maxScore    Int?
+  status      FormSubmissionStatus @default(SUBMITTED)
+  reviewerId  String?
+  reviewedAt  DateTime?
+  reviewNotes String?              @db.Text
+  submittedAt DateTime             @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  form     FormTemplate @relation(fields: [formId], references: [id], onDelete: Cascade)
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team     Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, submittedAt])
+  @@index([formId])
+  @@index([userId])
+  @@index([teamId])
 }

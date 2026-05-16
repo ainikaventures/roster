@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   Clock,
+  ClipboardCheck,
   ListChecks,
   MessageSquare,
   Megaphone,
@@ -29,7 +30,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/app', label: 'Dashboard', icon: LayoutDashboard, mobile: true, phase: 0 },
   { href: '/app/schedule', label: 'Schedule', icon: CalendarDays, mobile: true, phase: 1 },
   { href: '/app/time', label: 'Time Clock', icon: Clock, mobile: true, phase: 1 },
-  { href: '/app/tasks', label: 'Tasks', icon: ListChecks, phase: 3 },
+  { href: '/app/tasks', label: 'Tasks', icon: ListChecks, mobile: true, phase: 3 },
+  { href: '/app/forms', label: 'Forms', icon: ClipboardCheck, phase: 3 },
   { href: '/app/chat', label: 'Chat', icon: MessageSquare, mobile: true, phase: 2 },
   { href: '/app/updates', label: 'Updates', icon: Megaphone, phase: 2 },
   { href: '/app/directory', label: 'Directory', icon: Users, phase: 1 },
