@@ -33,11 +33,12 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches    Branch[]
-  memberships Membership[]
-  shifts      Shift[]
-  timeEntries TimeEntry[]
-  auditLogs   AuditLog[]
+  branches      Branch[]
+  memberships   Membership[]
+  shifts        Shift[]
+  timeEntries   TimeEntry[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
 }
 
 model Branch {
@@ -97,6 +98,7 @@ model User {
   shifts             Shift[]
   timeEntries        TimeEntry[]
   auditLogs          AuditLog[]
+  notifications      Notification[]
 }
 
 // Auth.js (NextAuth) — OAuth account link
@@ -257,6 +259,32 @@ model Break {
   timeEntry TimeEntry @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
 
   @@index([timeEntryId])
+}
+
+// =====================================================================
+// Audit log
+// =====================================================================
+
+// =====================================================================
+// Notifications (Phase 1 — in-app only; email/push arrive in later phases)
+// =====================================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  kind      String // see NotificationKind in @roster/types
+  title     String
+  body      String?
+  url       String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@index([orgId])
 }
 
 // =====================================================================

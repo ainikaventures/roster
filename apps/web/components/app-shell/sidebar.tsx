@@ -23,7 +23,9 @@ export function Sidebar({ role }: { role: Role }) {
         {items.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          // Phase 0 and Phase 1 features are live; later phases render as "Soon".
           const comingSoon = item.phase > 1;
+          // Keep this in sync as features land.
 
           const inner = (
             <span

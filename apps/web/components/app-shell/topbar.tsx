@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@roster/ui';
 import { OrgSwitcher } from './org-switcher';
+import { NotificationBell } from './notification-bell';
 
 export function Topbar({
   user,
@@ -39,7 +40,8 @@ export function Topbar({
         <OrgSwitcher orgs={orgs} activeOrgId={activeOrgId} activeOrg={activeOrg} />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
+        <NotificationBell />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="User menu">

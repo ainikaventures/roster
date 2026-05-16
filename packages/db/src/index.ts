@@ -1,6 +1,7 @@
 export { prisma } from './client';
 export * from './scope';
 export { seedOrganization } from './seed-org';
+export { notify, notifyMany, notifyTeam } from './notify';
 export type {
   Organization,
   Branch,
@@ -11,6 +12,7 @@ export type {
   Shift,
   TimeEntry,
   Break,
+  Notification,
   AuditLog,
   Role,
   Prisma,
