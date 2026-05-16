@@ -1,8 +1,10 @@
+import { prisma } from '@roster/db';
 import { requireScope, loadScopeContext } from '@/lib/scope';
 import { Sidebar } from '@/components/app-shell/sidebar';
 import { Topbar } from '@/components/app-shell/topbar';
 import { MobileNav } from '@/components/app-shell/mobile-nav';
 import { ScopeBreadcrumb } from '@/components/app-shell/scope-breadcrumb';
+import { hexToHsl } from '@/lib/color';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,10 +14,25 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const ctx = await requireScope();
-  const scopeData = await loadScopeContext(ctx);
+  const [scopeData, branding] = await Promise.all([
+    loadScopeContext(ctx),
+    prisma.organization.findUnique({
+      where: { id: ctx.orgId },
+      select: { brandColor: true },
+    }),
+  ]);
+
+  // Map the org's hex brand color to the design tokens used by buttons + accents.
+  const brandHsl = branding?.brandColor ? hexToHsl(branding.brandColor) : null;
+  const style = brandHsl
+    ? ({
+        ['--primary' as const]: brandHsl,
+        ['--ring' as const]: brandHsl,
+      } as React.CSSProperties)
+    : undefined;
 
   return (
-    <div className="flex min-h-dvh w-full bg-muted/20">
+    <div className="flex min-h-dvh w-full bg-muted/20" style={style}>
       <Sidebar role={ctx.scope.role} />
 
       <div className="flex flex-1 flex-col">

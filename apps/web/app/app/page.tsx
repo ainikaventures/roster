@@ -106,7 +106,7 @@ export default async function DashboardPage() {
               { label: 'Onboarding + documents + PTO (Phase 4)', done: true },
               { label: 'Training + knowledge base (Phase 5)', done: true },
               { label: 'Advanced scheduling + payroll (Phase 6)', done: true },
-              { label: 'Billing + integrations (Phase 7)', done: false },
+              { label: 'Billing + REST API + webhooks (Phase 7)', done: true },
               { label: 'Enterprise & SSO (Phase 8)', done: false },
             ]}
           />

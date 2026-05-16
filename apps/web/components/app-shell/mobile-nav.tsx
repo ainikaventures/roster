@@ -8,10 +8,10 @@ import { visibleNav } from './nav-items';
 
 export function MobileNav({ role }: { role: Role }) {
   const pathname = usePathname();
-  // Show only items flagged for mobile that are shipped (Phase ≤ 6).
+  // Show only items flagged for mobile that are shipped (Phase ≤ 7).
   // Cap to 5 so the bottom bar stays usable on small phones.
   const items = visibleNav(role, true)
-    .filter((i) => i.phase <= 6)
+    .filter((i) => i.phase <= 7)
     .slice(0, 5);
 
   return (

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { prisma, notifyTeam } from '@roster/db';
 import { audit, canWriteToTeam, ctxOr401, err, json, ok } from '@/lib/api';
+import { emitWebhookEvent } from '@/lib/webhooks';
 
 // ---------------------------------------------------------------------------
 // POST /api/shifts/publish
@@ -66,6 +67,14 @@ export async function POST(req: Request) {
       entity: 'Team',
       entityId: team.id,
       metadata: { count: result.count, from: parsed.data.from, to: parsed.data.to },
+    });
+
+    await emitWebhookEvent(ctx.orgId, 'shift.published', {
+      teamId: team.id,
+      teamName: team.name,
+      count: result.count,
+      from: parsed.data.from,
+      to: parsed.data.to,
     });
   }
 

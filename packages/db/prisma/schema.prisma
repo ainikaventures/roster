@@ -23,15 +23,17 @@ datasource db {
 // =====================================================================
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  timezone  String   @default("UTC")
-  currency  String   @default("USD")
-  locale    String   @default("en")
-  logoUrl   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  name       String
+  slug       String   @unique
+  timezone   String   @default("UTC")
+  currency   String   @default("USD")
+  locale     String   @default("en")
+  logoUrl    String?
+  /// Hex color (#RRGGBB) used for the org's brand accent in the app.
+  brandColor String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   branches              Branch[]
   memberships           Membership[]
@@ -56,6 +58,11 @@ model Organization {
   shiftTemplates        ShiftTemplate[]
   shiftSwapRequests     ShiftSwapRequest[]
   availabilities        Availability[]
+  apiKeys               ApiKey[]
+  webhooks              Webhook[]
+  webhookDeliveries     WebhookDelivery[]
+  customRoles           CustomRole[]
+  subscription          Subscription?
 }
 
 model Branch {
@@ -157,6 +164,10 @@ model User {
   shiftSwapsAddressed      ShiftSwapRequest[]      @relation("SwapRecipient")
   shiftSwapsReviewed       ShiftSwapRequest[]      @relation("SwapReviewer")
   availabilities           Availability[]
+  createdApiKeys           ApiKey[]                @relation("ApiKeyCreator")
+  createdWebhooks          Webhook[]               @relation("WebhookCreator")
+  customRoleAssignments    CustomRoleAssignment[]
+  createdCustomRoles       CustomRole[]            @relation("CustomRoleCreator")
 }
 
 // Auth.js (NextAuth) — OAuth account link
@@ -1082,4 +1093,147 @@ model ShiftSwapRequest {
   @@index([shiftId])
   @@index([requesterId])
   @@index([recipientId])
+}
+
+// =====================================================================
+// Admin / Billing / Integrations (Phase 7)
+// =====================================================================
+
+/// API keys for the public REST API.
+/// `prefix` is the human-readable, non-secret portion (e.g. "rstr_live_abc1");
+/// `hashedKey` stores the bcrypt hash of the full key, which is only displayed
+/// once at creation time.
+model ApiKey {
+  id          String    @id @default(cuid())
+  orgId       String
+  prefix      String    @unique
+  hashedKey   String
+  name        String
+  /// JSON array of scopes like ["read:shifts", "write:tasks"].
+  scopes      Json      @default("[]")
+  createdById String
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy User         @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model Webhook {
+  id          String   @id @default(cuid())
+  orgId       String
+  url         String
+  /// HMAC signing secret. Shown once at creation.
+  secret      String
+  /// JSON array of event names like ["shift.created", "timesheet.approved"].
+  events      Json     @default("[]")
+  isActive    Boolean  @default(true)
+  description String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org        Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy  User              @relation("WebhookCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([orgId])
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model WebhookDelivery {
+  id          String                @id @default(cuid())
+  orgId       String
+  webhookId   String
+  event       String
+  /// The body that was POSTed (or will be) to the webhook URL.
+  payload     Json
+  statusCode  Int?
+  responseBody String?              @db.Text
+  attemptCount Int                  @default(0)
+  status      WebhookDeliveryStatus @default(PENDING)
+  errorMessage String?              @db.Text
+  attemptedAt DateTime?
+  createdAt   DateTime              @default(now())
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  webhook Webhook      @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@index([orgId, status])
+}
+
+// Stripe-backed billing. Phase 7 ships the schema + an abstraction; the
+// actual Stripe API calls plug in when the SDK + keys are present.
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+model Subscription {
+  id                   String              @id @default(cuid())
+  orgId                String              @unique
+  plan                 String              @default("free")
+  status               SubscriptionStatus  @default(TRIALING)
+  seats                Int                 @default(0)
+  stripeCustomerId     String?             @unique
+  stripeSubscriptionId String?             @unique
+  currentPeriodEnd     DateTime?
+  trialEndsAt          DateTime?
+  cancelAt             DateTime?
+  canceledAt           DateTime?
+  updatedAt            DateTime            @updatedAt
+  createdAt            DateTime            @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+// Custom roles let admins define their own permission sets beyond the
+// fixed Role enum. Phase 7 starts the schema; full permission UI lives
+// in the org settings.
+model CustomRole {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  description String?
+  /// JSON array of permission identifiers (e.g. "schedule.write",
+  /// "payroll.export"). See apps/web/lib/permissions.ts for the
+  /// canonical list.
+  permissions Json     @default("[]")
+  archivedAt  DateTime?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org         Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy   User                   @relation("CustomRoleCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  assignments CustomRoleAssignment[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
+model CustomRoleAssignment {
+  id        String   @id @default(cuid())
+  roleId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  role CustomRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, userId])
+  @@index([userId])
 }

@@ -4,7 +4,7 @@
 
 Roster is a unified web platform (with PWA support) that lets businesses manage their entire deskless workforce — scheduling shifts, tracking time, communicating with the team, assigning tasks, onboarding new hires, and running HR workflows — without needing five separate tools.
 
-**Status:** Phase 6 — Advanced Scheduling + Payroll shipped: shift templates and copy-week, open / claim-based shifts, shift swap requests with two-step approval (recipient + manager), availability windows, GPS geofence enforcement and optional selfie verification on clock-in, federal-style 40h/wk overtime in the timesheet, and CSV payroll export. Builds on Phase 0–5. See [info/PRODUCT_SPEC.md](info/PRODUCT_SPEC.md) for the full roadmap.
+**Status:** Phase 7 — Admin, Billing, Integrations shipped: a public REST API under `/api/v1` with hashed Bearer API keys, signed outbound webhooks (HMAC-SHA256), an audit-log UI, custom roles + permission matrix, branding (logo + brand color applied across the app), and a Stripe-ready billing schema with plan switching. Builds on Phase 0–6. See [info/PRODUCT_SPEC.md](info/PRODUCT_SPEC.md) for the full roadmap.
 
 ## Architecture
 
