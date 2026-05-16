@@ -1,0 +1,282 @@
+// ---------------------------------------------------------------------------
+// Roster — Phase 0 data model
+//
+// Three-level org hierarchy:
+//   Organization → Branch → Team → Employee
+//
+// Employees are scoped to exactly one team.
+// Managers can span multiple teams and/or branches via ManagerAssignment.
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================================
+// Tenancy
+// =====================================================================
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  timezone  String   @default("UTC")
+  currency  String   @default("USD")
+  locale    String   @default("en")
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches    Branch[]
+  memberships Membership[]
+  shifts      Shift[]
+  timeEntries TimeEntry[]
+  auditLogs   AuditLog[]
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  address   String?
+  timezone  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org                Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  teams              Team[]
+  managerAssignments ManagerAssignment[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  branchId  String
+  name      String
+  color     String? // hex, used in multi-team calendar color-coding
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  members            Membership[]
+  shifts             Shift[]
+  timeEntries        TimeEntry[]
+  managerAssignments ManagerAssignment[]
+
+  @@unique([branchId, name])
+  @@index([branchId])
+}
+
+// =====================================================================
+// Users & access
+// =====================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  avatarUrl     String?
+  timezone      String? // null = inherit from org
+  locale        String? // null = inherit from org
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  memberships        Membership[]
+  managerAssignments ManagerAssignment[]
+  accounts           Account[]
+  sessions           Session[]
+  shifts             Shift[]
+  timeEntries        TimeEntry[]
+  auditLogs          AuditLog[]
+}
+
+// Auth.js (NextAuth) — OAuth account link
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// Auth.js session row
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Auth.js verification token (magic links)
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// One user can belong to multiple orgs (workspace switcher).
+// Membership locks a user to a role within an org.
+//
+// - EMPLOYEE: teamId MUST be set (exactly one team).
+// - ADMIN / OWNER: teamId is NULL (org-wide).
+// - BRANCH_MANAGER / TEAM_MANAGER: teamId is NULL on Membership;
+//   actual scope comes from ManagerAssignment rows.
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String
+  orgId     String
+  teamId    String?
+  role      Role     @default(EMPLOYEE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, orgId])
+  @@index([orgId, role])
+  @@index([teamId])
+}
+
+// Managers can span multiple branches and/or teams.
+// Exactly one of (branchId, teamId) should be set per row.
+// Employees do NOT use this table — their team comes from Membership.teamId.
+model ManagerAssignment {
+  id        String   @id @default(cuid())
+  userId    String
+  branchId  String?
+  teamId    String?
+  createdAt DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  team   Team?   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, branchId, teamId])
+  @@index([userId])
+  @@index([branchId])
+  @@index([teamId])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  BRANCH_MANAGER
+  TEAM_MANAGER
+  EMPLOYEE
+}
+
+// =====================================================================
+// Scheduling
+// =====================================================================
+
+model Shift {
+  id        String   @id @default(cuid())
+  orgId     String
+  teamId    String
+  userId    String?
+  startsAt  DateTime
+  endsAt    DateTime
+  notes     String?
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+  @@index([teamId, startsAt])
+  @@index([userId, startsAt])
+}
+
+// =====================================================================
+// Time clock
+// =====================================================================
+
+model TimeEntry {
+  id         String    @id @default(cuid())
+  orgId      String
+  teamId     String
+  userId     String
+  clockedIn  DateTime
+  clockedOut DateTime?
+  approved   Boolean   @default(false)
+  approvedBy String?
+  approvedAt DateTime?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  team   Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  breaks Break[]
+
+  @@index([orgId])
+  @@index([teamId, userId, clockedIn])
+  @@index([userId, clockedIn])
+}
+
+model Break {
+  id          String    @id @default(cuid())
+  timeEntryId String
+  startedAt   DateTime
+  endedAt     DateTime?
+  paid        Boolean   @default(false)
+
+  timeEntry TimeEntry @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+
+  @@index([timeEntryId])
+}
+
+// =====================================================================
+// Audit log
+// =====================================================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String?
+  action    String // e.g. "shift.created", "membership.role_changed"
+  entity    String // e.g. "Shift", "Membership"
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, createdAt])
+  @@index([userId])
+  @@index([entity, entityId])
+}
